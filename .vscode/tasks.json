@@ -1,0 +1,28 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Python in External Terminal",
+            "type": "shell",
+            "command": "cmd.exe",
+            "args": [
+                "/c",
+                "start",
+                "cmd",
+                "/k",
+                "python ${file}"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "dedicated"
+            },
+            "problemMatcher": []
+        }
+    ]
+}
