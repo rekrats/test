@@ -23,31 +23,36 @@ class PositionEncoding(nn.Module):
         # Which causes Runtime Error
         PE = torch.zeros(self.Seq_len, self.Embedding_d)
         Positions = torch.arange(0, self.Seq_len, dtype = float).unsqueeze(1)
-        div_mode = math.exp(torch.arange(0, self.Embedding_d, 2) * math.log(-10000) / self.Embedding_d)
+        div_mode = torch.exp(torch.arange(0, self.Embedding_d, 2).float() * (-math.log(10000)) / self.Embedding_d)
         PE[: , 0::2] = torch.sin(Positions * div_mode)
         PE[: , 1::2] = torch.cos(Positions * div_mode)
-        PE.unsqueeze(0) # (1, seqlen, embed_d)
+        PE = PE.unsqueeze(0) # (1, seqlen, embed_d)
+        assert PE.size(0) == 1 # 这里要赋值回去才能更新 PE 的维度
 
         self.register_buffer("PE", PE)
 
     def forward(self, x): # 注意：x 的 size 为 (n, x_len, Eembedding)
         # PE 为 (1(broadcast), maxseq_len(partially used), embedding)
         # 所以这个 PE 是设计好的一个编码矩阵，直接用来加就行
-        x = x + (self.PE[: , :x.shape[1], :]).requires_grad(False)
+        x = x + (self.PE[: , :x.shape[1], :]).requires_grad_(False)
         return self.dropout(x)
     
-class LayerNomalization(nn.Module):
-    # 正则化层，两个可学习参数 alpha and bias
-    def __init__(self, eps : float = 10**-6) -> None:
+class LayerNormalization(nn.Module):
+
+    def __init__(self, features: int, eps:float=10**-6) -> None:
         super().__init__()
         self.eps = eps
-        self.alpha = nn.parameter(torch.ones(1))
-        self.bias = nn.parameter(torch.zeros(1))
+        self.alpha = nn.Parameter(torch.ones(features)) # alpha is a learnable parameter
+        self.bias = nn.Parameter(torch.zeros(features)) # bias is a learnable parameter
 
     def forward(self, x):
-        mean = x.mean(dim = -1, keepdim = True) # why dim = -1?
-        std = x.std(dim = -1, keepdim = True) 
-        return self.alpha * ((x - mean)/(std + self.eps)) + self.bias
+        # x: (batch, seq_len, hidden_size)
+         # Keep the dimension for broadcasting
+        mean = x.mean(dim = -1, keepdim = True) # (batch, seq_len, 1)
+        # Keep the dimension for broadcasting
+        std = x.std(dim = -1, keepdim = True) # (batch, seq_len, 1)
+        # eps is to prevent dividing by zero or when std is very small
+        return self.alpha * (x - mean) / (std + self.eps) + self.bias
     
 class FeedingForward(nn.Module):
     # attention 只是一个机制
@@ -59,7 +64,7 @@ class FeedingForward(nn.Module):
         self.L2 = nn.Linear(d_ff, Embedding_d)
 
     def forward(self, x):
-        return self.L2(self.dropout(nn.ReLU(self.L1(x))))
+        return self.L2(self.dropout(torch.relu(self.L1(x))))
     
 class MultiHeadAttentionBlock(nn.Module):
     # 这一层应当接受三个输入 qkv 输出whatever
@@ -78,7 +83,7 @@ class MultiHeadAttentionBlock(nn.Module):
         self.Wv = nn.Linear(self.Embedding_d, self.Embedding_d)
         self.Wo = nn.Linear(self.Embedding_d, self.Embedding_d)
     @staticmethod
-    def attention(self, query, key, value, mask, Dropout: nn.Dropout):
+    def attention(query, key, value, mask, Dropout: nn.Dropout):
         # query, key, value 的规格均为(batch, h, len, dk)
         dk = query.shape[-1]
         attention_scores = (query @ key.transpose(-2, -1)) / math.sqrt(dk)
@@ -103,7 +108,7 @@ class MultiHeadAttentionBlock(nn.Module):
         key = key.view(key.shape[0], key.shape[1], self.h, self.d_k).transpose(1, 2)
         value = value.view(value.shape[0], value.shape[1], self.h, self.d_k).transpose(1, 2)
         # Xout 的规格为(batch, h, len, dk), 也就是 h 个 head，拼接成 H 之后和 Wo 做运算
-        attention_scores, Xout = self.attention(query, key, value, mask, self.dropout)
+        attention_scores, Xout = MultiHeadAttentionBlock.attention(query=query, key=key, value=value, mask=mask, Dropout=self.dropout)
         Xout = Xout.transpose(1, 2).contiguous().view(Xout.shape[0], -1, self.Embedding_d)
 
         return self.Wo(Xout)
@@ -112,7 +117,7 @@ class ResidualConnection(nn.Module):
     def __init__(self, dropout: float) -> None:
         super().__init__()
         self.dropout = nn.Dropout(dropout)
-        self.norm = LayerNomalization()
+        self.norm = LayerNormalization(features=1)
     def forward(self, x, sublayer):
         # 接受一个层和 x，返回这个层的正则化加上残差的结果
         # residual connection 的中文翻译是残差连接
@@ -123,7 +128,7 @@ class EncoderBlock(nn.Module):
         super().__init__()
         self.attenblock = atten # MultiHeadAttentionBlock
         self.feedblock = feed # FeedingForward
-        self.residuals = nn.ModuleList( ResidualConnection(dropout) for _ in range(2) )
+        self.residuals = nn.ModuleList([ResidualConnection(dropout) for _ in range(2)])
     def forward(self, x, mask):
         # 需要一个 mask 作为每一个 encoder block 的输入
         x = self.residuals[0](x, lambda x: self.attenblock(x, x, x, mask))
@@ -134,7 +139,7 @@ class Encoder(nn.Module):
     def __init__(self, layers: nn.ModuleList) -> None:
         super().__init__()
         self.layers = layers
-        self.norm = LayerNomalization()
+        self.norm = LayerNormalization(features=1)
     def forward(self, x, mask):
         for layer in self.layers:
             x = layer(x, mask)
@@ -148,7 +153,7 @@ class DecoderBlock(nn.Module):
         self.self_ATT = self_ATT
         self.cross_ATT = cross_ATT
         self.feed = feed
-        self.residuals = nn.ModuleList( ResidualConnection(dropout) for _ in range(3) )
+        self.residuals = nn.ModuleList([ResidualConnection(dropout) for _ in range(3)])
     def forward(self, x, encoder_output, en_mask, de_mask):
         x = self.residuals[0](x, lambda x: self.self_ATT(x, x, x, de_mask))
         x = self.residuals[1](x, lambda x: self.cross_ATT(x, encoder_output, encoder_output, en_mask))
@@ -159,7 +164,7 @@ class Decoder(nn.Module):
     def __init__(self, layers: nn.ModuleList) -> None:
         super().__init__()
         self.layers = layers
-        self.norm = LayerNomalization()
+        self.norm = LayerNormalization(features=1)
     def forward(self, x, encoder_output, en_mask, de_mask):
         for layer in self.layers:
             x = layer(x, encoder_output, en_mask, de_mask)

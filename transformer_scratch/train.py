@@ -58,15 +58,17 @@ def get_ds(config):
     train_ds = BilingualDataset(train_ds_raw, tokenizer_src, tokenizer_tgt, config['src_lang'], config['tgt_lang'], config['seq_len'])
     validation_ds = BilingualDataset(validation_ds_raw, tokenizer_src, tokenizer_tgt, config['src_lang'], config['tgt_lang'], config['seq_len'])
 
-    # count maxlen
-    src_max_len = 0
-    tgt_max_len = 0
-    for item in train_ds:
-        src_ids = tokenizer_src.encode(item['encoder_input'][config['src_lang']]).ids
-        tgt_ids = tokenizer_tgt.encode(item['decoder_input'][config['tgt_lang']]).ids
-        src_max_len = max(src_max_len, len(src_ids))
-        tgt_max_len = max(tgt_max_len, len(tgt_ids))
-    print(f"src_max_len: {src_max_len}, tgt_max_len: {tgt_max_len}")
+    # get max length of source and target sentence
+    max_len_src = 0
+    max_len_tgt = 0
+    for item in ds_raw:
+        src_ids = tokenizer_src.encode(item['translation'][config['src_lang']]).ids
+        tgt_ids = tokenizer_tgt.encode(item['translation'][config['tgt_lang']]).ids
+        max_len_src = max(max_len_src, len(src_ids))
+        max_len_tgt = max(max_len_tgt, len(tgt_ids))
+
+    print(f'Max length of source sentence: {max_len_src}')
+    print(f'Max length of target sentence: {max_len_tgt}')
 
     # buidl data loader
     train_dl = DataLoader(train_ds, batch_size=config['batch_size'], shuffle=True)
@@ -107,6 +109,7 @@ def train_model(config):
         global_step = state['global_step']
     else:
         print('No model to preload, starting from scratch')
+    # assert(0)
 
     loss_fn = nn.CrossEntropyLoss(ignore_index=tokenizer_src.token_to_id('[PAD]'), label_smoothing=0.1).to(device)
 
@@ -120,7 +123,7 @@ def train_model(config):
             encoder_mask = batch['encoder_mask'].to(device)
             decoder_mask = batch['decoder_mask'].to(device)
 
-            encoder_output = model.ENCODE(encoder_input, encoder_mask, decoder_input, decoder_mask) # outshape: (batch_size, seq_len, d_model)
+            encoder_output = model.ENCODE(encoder_input, encoder_mask)# outshape: (batch_size, seq_len, d_model)
             decoder_output = model.DECODE(decoder_input, encoder_output, encoder_mask, decoder_mask) # outshape: (batch_size, seq_len, d_model)
             project_output = model.project(decoder_output) # outshape: (batch_size, seq_len, vocab_size)
             label = batch['label'].to(device) # outshape: (batch_size, seq_len)
@@ -140,7 +143,7 @@ def train_model(config):
 
             global_step += 1
 
-        if epoch % 5 == 0:
+        if (epoch+1) % 5 == 0:
             model_filename = get_weights_file_path(config, f"{epoch:02d}")
             torch.save({
                 'epoch': epoch,
@@ -148,6 +151,7 @@ def train_model(config):
                 'optimizer_state_dict': optimizer.state_dict(),
                 'global_step': global_step
             }, model_filename)
+        
 
 
 if __name__ == '__main__':

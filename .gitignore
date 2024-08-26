@@ -3,5 +3,5 @@ __pycache__
 *.json
 runs/
 weights/
-
+opus_books_weights/
 wandb/

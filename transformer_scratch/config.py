@@ -8,8 +8,8 @@ def get_config():
         "seq_len": 350,
         "d_model": 512,
         "datasource": 'opus_books',
-        "lang_src": "en", # English
-        "lang_tgt": "zh", # Chinese  
+        "src_lang": "en", # english
+        "tgt_lang": "it", # italian  
         "model_folder": "weights",
         "model_basename": "tmodel_",
         "preload": "latest",

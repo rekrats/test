@@ -13,9 +13,10 @@ class BilingualDataset(Dataset):
         self.seq_len = seq_len
         
         # define sos and eos and pad tokens
-        self.sos_token = torch.tensor(tokenizer_tgt.token_to_id("[SOS]"), dtype=torch.int64) # shape: tensor:(1)
-        self.eos_token = torch.tensor(tokenizer_tgt.token_to_id("[EOS]"), dtype=torch.int64)
-        self.pad_token = torch.tensor(tokenizer_tgt.token_to_id("[PAD]"), dtype=torch.int64)
+        self.sos_token = torch.tensor([tokenizer_tgt.token_to_id("[SOS]")], dtype=torch.int64) # shape: tensor:(1)
+        self.eos_token = torch.tensor([tokenizer_tgt.token_to_id("[EOS]")], dtype=torch.int64) # 用 [] 包裹来确保是一个张量而不是一个标量
+        self.pad_token = torch.tensor([tokenizer_tgt.token_to_id("[PAD]")], dtype=torch.int64)
+
 
     def __len__(self):
         return len(self.ds)
@@ -37,28 +38,35 @@ class BilingualDataset(Dataset):
             return ValueError("Sequence length is too Long")
 
         # tokens to tensor (need add paddings)
+        # Add <s> and </s> token
         encoder_input = torch.cat(
             [
                 self.sos_token,
-                torch.tensor(enc_input_tokens, dtype=torch.int64), # shape: tensor:(seq_len)
+                torch.tensor(enc_input_tokens, dtype=torch.int64),
                 self.eos_token,
-                torch.tensor([self.pad_token]*enc_padding, dtype=torch.int64) # shape: tensor:(enc_padding)
-            ]
+                torch.tensor([self.pad_token] * enc_padding, dtype=torch.int64),
+            ],
+            dim=0,
         )
-        # decoderinput has only sos, while label has only eos
+
+        # Add only <s> token
         decoder_input = torch.cat(
             [
                 self.sos_token,
-                torch.tensor(dec_input_tokens, dtype=torch.int64), # shape: tensor:(seq_len)
-                torch.tensor([self.pad_token]*dec_padding, dtype=torch.int64) # shape: tensor:(dec_padding)
-            ]
+                torch.tensor(dec_input_tokens, dtype=torch.int64),
+                torch.tensor([self.pad_token] * dec_padding, dtype=torch.int64),
+            ],
+            dim=0,
         )
+
+        # Add only </s> token
         label = torch.cat(
             [
-                torch.tensor(dec_input_tokens, dtype=torch.int64), # shape: tensor:(seq_len)
+                torch.tensor(dec_input_tokens, dtype=torch.int64),
                 self.eos_token,
-                torch.tensor([self.pad_token]*dec_padding, dtype=torch.int64) # shape: tensor:(dec_padding)
-            ]
+                torch.tensor([self.pad_token] * dec_padding, dtype=torch.int64),
+            ],
+            dim=0,
         )
         assert encoder_input.size(0) == self.seq_len
         assert decoder_input.size(0) == self.seq_len
