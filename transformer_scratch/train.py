@@ -22,7 +22,59 @@ from pathlib import Path
 
 import warnings
 
+def greedy_decode(model, src, src_mask, tokenizer_src, tokenizer_tgt, max_len, device):
+    # get the translation of the source sentence starting with [SOS]
 
+    sos_idx = tokenizer_tgt.token_to_id('[SOS]')
+    eos_idx = tokenizer_tgt.token_to_id('[EOS]')
+
+    encoder_output = model.ENCODE(src, src_mask)
+    decoder_input = torch.empty(1, 1).fill_(sos_idx).type_as(src).to(device)
+
+    while True:
+        if decoder_input.size(1) >= max_len:
+            break
+
+        decoder_mask = casual_mask(decoder_input.size(1)).type_as(src).to(device)
+        out = model.DECODE(decoder_input, encoder_output, src_mask, decoder_mask)
+
+        prob = model.project(out[:, -1])
+
+        _, next_token = torch.max(prob, dim=1)
+        decoder_input = torch.cat([decoder_input, torch.empty(1, 1).fill_(next_token.item()).type_as(src).to(device)], dim=1)
+        
+        if next_token == eos_idx:
+            break
+
+    return decoder_input.squeeze(0)     
+
+def run_validation(model, val_ds, src_tokenizer, tgt_tokenizer, max_len, device, print_msg, global_state, writer, run_examples=2):
+    model.eval()
+    count = 0
+
+    console_width = 80
+    
+    with torch.no_grad():
+        for batch in val_ds: # batch size is (1, seq_len, d_model)
+            count += 1
+            encoder_input = batch['encoder_input'].to(device)
+            encoder_mask = batch['encoder_mask'].to(device)
+            assert encoder_input.size(0) == 1 # batch size is 1
+
+            model_output = greedy_decode(model, encoder_input, encoder_mask, src_tokenizer, tgt_tokenizer, max_len, device)
+
+            sorce_sentence = batch['src_text'][0]
+            expected_sentence = batch['tgt_text'][0]
+            predicted_sentence = tgt_tokenizer.decode(model_output.detach().cpu().numpy())
+
+            # print it to the console
+            print_msg('-'*console_width)
+            print_msg(f"Source: {sorce_sentence}")
+            print_msg(f"Expected: {expected_sentence}")
+            print_msg(f"Predicted: {predicted_sentence}")
+
+            if count >= run_examples:
+                break
 
 def get_all_sentences(ds, lang):
     for item in ds:
@@ -143,7 +195,10 @@ def train_model(config):
 
             global_step += 1
 
-        if (epoch+1) % 5 == 0:
+        # Run validation
+        run_validation(model, validation_loader, tokenizer_src, tokenizer_tgt, config['seq_len'], device, lambda msg: batch_iter.write(msg), global_step, writer)
+
+        if True:
             model_filename = get_weights_file_path(config, f"{epoch:02d}")
             torch.save({
                 'epoch': epoch,
