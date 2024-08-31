@@ -184,7 +184,11 @@ class Agent:
         terminateds = torch.tensor(terminateds, dtype=torch.float, device=device)
 
         with torch.no_grad():
-            target_q = rewards + self.discount_factor_g * target_dqn(new_states).max(dim=1)[0] * (1 - terminateds)
+            if self.enable_double_dqn:
+                best_actions = policy_dqn(new_states).argmax(dim=1).unsqueeze(1)
+                target_q = rewards + self.discount_factor_g * (1-terminateds) * target_dqn(new_states).gather(dim=1, index=best_actions).squeeze()
+            else:
+                target_q = rewards + self.discount_factor_g * target_dqn(new_states).max(dim=1)[0] * (1 - terminateds)
         
         q = policy_dqn(now_states).gather(dim=1, index=actions.unsqueeze(1)).squeeze()
         
