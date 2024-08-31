@@ -73,14 +73,15 @@ class Agent:
             with open(self.LOG_FILE, 'w') as file:
                 file.write(log_message + '\n')
 
-        # env = gym.make("FlappyBird-v0", render_mode="human", use_lidar=False)
-        env = gym.make("CartPole-v1", render_mode="human" if render else None)
+        env = gym.make(self.env_id, render_mode='human' if render else None, **self.env_make_params)
         state_dim = env.observation_space.shape[0]
         action_dim = env.action_space.n
         policy_dqn = DQN(state_dim, action_dim, self.fc1_nodes).to(device)
-        epsilon = self.epsilon_init
+        
 
         if is_training:
+            epsilon = self.epsilon_init
+            epsilon_list = []
             memory = ReplayMemory(max_len=self.replay_memory_size)
             target_dqn = DQN(state_dim, action_dim, self.fc1_nodes).to(device)
             target_dqn.load_state_dict(policy_dqn.state_dict())
@@ -94,7 +95,6 @@ class Agent:
             policy_dqn.eval()
 
         reward_list = []
-        epsilon_list = []
 
         for episode in itertools.count():
             now_state, _ = env.reset()
@@ -104,11 +104,15 @@ class Agent:
 
             while ((not terminated) and episode_reward < self.stop_on_reward):
                 # Next action:
-                if random.random() < epsilon:
-                    action = env.action_space.sample()
-                    action = torch.tensor(action, dtype=torch.int64, device=device)
+                if is_training:
+                    if random.random() < epsilon:
+                        action = env.action_space.sample()
+                        action = torch.tensor(action, dtype=torch.int64, device=device)
+                    else:
+                        # (state_dim,) -> (1, state_dim)
+                        with torch.no_grad():
+                            action = policy_dqn(now_state.unsqueeze(0)).squeeze().argmax()
                 else:
-                    # (state_dim,) -> (1, state_dim)
                     with torch.no_grad():
                         action = policy_dqn(now_state.unsqueeze(0)).squeeze().argmax()
 
@@ -125,15 +129,15 @@ class Agent:
                     sync_count += 1
                 now_state = new_state
 
-            epsilon = max(epsilon * self.epsilon_decay, self.epsilon_min)
             reward_list.append(episode_reward)
-            epsilon_list.append(epsilon)
 
             if is_training:
+                epsilon_list.append(epsilon)
+                epsilon = max(epsilon * self.epsilon_decay, self.epsilon_min)
                 if episode_reward > best_reward:
                     torch.save(policy_dqn.state_dict(), self.MODEL_FILE)
-                    best_reward = episode_reward
                     log_message = f"{datetime.now().strftime(DATE_FORMAT)}: New best reward {episode_reward:0.1f} ({(episode_reward-best_reward)/best_reward*100:+.1f}%) at episode {episode}, saving model..."
+                    best_reward = episode_reward
                     print(log_message)
                     with open(self.LOG_FILE, 'a') as file:
                         file.write(log_message + '\n')
@@ -196,9 +200,9 @@ if __name__ == '__main__':
     # parser.add_argument('--train', help='Training mode', action='store_true')
     # args = parser.parse_args()
 
-    dql = Agent(hyperparameters_set="cartpole1")
+    dql = Agent(hyperparameters_set="flappybird1")
 
-    if False:
+    if True:
         dql.run(is_training=True, render=False)
     else:
         dql.run(is_training=False, render=True)
