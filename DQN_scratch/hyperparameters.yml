@@ -15,15 +15,15 @@ cartpole1:
 flappybird1:
   env_id: FlappyBird-v0
   replay_memory_size: 100000
-  mini_batch_size: 64
+  mini_batch_size: 128
   epsilon_init: 1
-  epsilon_decay: 0.99995
-  epsilon_min: 0.1
+  epsilon_decay: 0.99999
+  epsilon_min: 0.2
   network_sync_rate: 10
-  learning_rate_a: 0.001
+  learning_rate_a: 0.0001
   discount_factor_g: 0.99
   stop_on_reward: 1000
-  fc1_nodes: 512
+  fc1_nodes: 32
   env_make_params:
     use_lidar: False
   enable_double_dqn: True
