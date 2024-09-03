@@ -4,7 +4,7 @@ from PPO_torch import PPO_agent
 from utils import plot_learning_curve
 
 if __name__ == '__main__':
-    env = gym.make('CartPole-v1')
+    env = gym.make('LunarLander-v2')
 
     n_games = 300
     N = 20
@@ -41,13 +41,13 @@ if __name__ == '__main__':
             score += reward
             obs = obs_
         score_history.append(score)
-        avg_score = np.mean(score_history[-50:])
+        avg_score = np.mean(score_history[-10:])
         if avg_score > best_score:
             best_score = avg_score
             agent.save_models()
             print(f'find new models at game {i}, score {score}, avg_score {avg_score}, saving...')
 
-        print(f'game {i}, score {score}, avg_score {avg_score}, time steps {n_steps}, learn steps {learn_iters}')
+        # print(f'game {i}, score {score}, avg_score {avg_score}, time steps {n_steps}, learn steps {learn_iters}')
 
     x = [i+1 for i in range(len(score_history))]
     plot_learning_curve(x, score_history, figure_file)

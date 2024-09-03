@@ -129,7 +129,8 @@ class PPO_agent:
         self.critic.load_checkpoint()
     
     def choose_action(self, obs):
-        state = torch.tensor([obs], dtype=torch.float).to(self.actor.device)
+        obs = np.array(obs)
+        state = torch.tensor(obs, dtype=torch.float).to(self.actor.device)
 
         dist = self.actor(state)
         value = self.critic(state)

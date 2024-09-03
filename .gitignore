@@ -7,3 +7,4 @@ opus_books_weights/
 wandb/
 !DQN_scratch/runs/
 tmp/
+!PPO_scratch/tmp/
