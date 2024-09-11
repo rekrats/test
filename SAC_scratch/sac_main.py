@@ -30,7 +30,7 @@ if __name__ == '__main__':
         score = 0
         while not done:
             action = agent.choose_action(observation)
-            observation_, reward, done, info = env.step(action)
+            observation_, reward, done, __, info = env.step([action])
             score += reward
             agent.remember(observation, action, reward, observation_, done)
             if not load_checkpoint:

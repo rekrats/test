@@ -154,7 +154,7 @@ class ActorNetwork(nn.Module):
         action = torch.tanh(actions)*torch.tensor(self.max_action).to(self.device)
         # tanh 函数的输出范围是 (-1, 1), 乘以 max_action 之后，输出范围是 (-max_action, max_action)
         log_probs = probabilities.log_prob(actions)
-        print('log_probs:', log_probs)
+        # print('log_probs:', log_probs)
         log_probs -= torch.log(1-action.pow(2)+self.reparam_noise)
         log_probs = log_probs.sum(-1, keepdim=True)
 
