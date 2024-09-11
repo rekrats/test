@@ -1,12 +1,14 @@
-import gymnasium as gym
+import gym
+import pybullet_envs
+
 import numpy as np
-from sac_torch import SAC_Agent
+from sac_torch import Agent
 from utils import plot_learning_curve
-from gymnasium import wrappers
+from gym import wrappers
 
 if __name__ == '__main__':
-    env = gym.make('InvertedPendulum-v4')
-    agent = SAC_Agent(input_dims=env.observation_space.shape, env=env,
+    env = gym.make('InvertedPendulumBulletEnv-v0')
+    agent = Agent(input_dims=env.observation_space.shape, env=env,
             n_actions=env.action_space.shape[0])
     n_games = 250
     # uncomment this line and do a mkdir tmp && mkdir video if you want to
@@ -30,11 +32,11 @@ if __name__ == '__main__':
         score = 0
         while not done:
             action = agent.choose_action(observation)
-            observation_, reward, done, __, info = env.step([action])
+            observation_, reward, done, info = env.step(action)
             score += reward
             agent.remember(observation, action, reward, observation_, done)
             if not load_checkpoint:
-                agent.learn() # learn from the experience every step
+                agent.learn()
             observation = observation_
         score_history.append(score)
         avg_score = np.mean(score_history[-100:])
