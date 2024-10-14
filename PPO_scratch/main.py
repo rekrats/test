@@ -4,7 +4,11 @@ from PPO_torch import PPO_agent
 from utils import plot_learning_curve
 
 if __name__ == '__main__':
-    env = gym.make('LunarLander-v2')
+    load_checkpoint = True
+    if load_checkpoint == False:
+        env = gym.make('LunarLander-v2')
+    else:
+        env = gym.make('LunarLander-v2', render_mode='human')
 
     n_games = 300
     N = 20
@@ -25,6 +29,9 @@ if __name__ == '__main__':
     learn_iters = 0
     avg_score = 0
 
+    if load_checkpoint:
+        agent.load_models()
+
     for i in range(n_games):
         obs, _ = env.reset()
         done = False
@@ -34,23 +41,25 @@ if __name__ == '__main__':
             action, prob, val = agent.choose_action(obs)
             obs_, reward, done, __, info = env.step(action)
             n_steps += 1
-            agent.remember(obs, action, reward, prob, val, done)
-            if n_steps % N == 0:
-                agent.learn()
-                learn_iters += 1
+            if not load_checkpoint:
+                agent.remember(obs, action, reward, prob, val, done)
+                if n_steps % N == 0:
+                    agent.learn()
+                    learn_iters += 1
             score += reward
             obs = obs_
-        score_history.append(score)
-        avg_score = np.mean(score_history[-10:])
-        if avg_score > best_score:
-            best_score = avg_score
-            agent.save_models()
-            print(f'find new models at game {i}, score {score}, avg_score {avg_score}, saving...')
+        if not load_checkpoint:
+            score_history.append(score)
+            avg_score = np.mean(score_history[-10:])
+            if avg_score > best_score:
+                best_score = avg_score
+                agent.save_models()
+                print(f'find new models at game {i}, score {score}, avg_score {avg_score}, saving...')
 
         # print(f'game {i}, score {score}, avg_score {avg_score}, time steps {n_steps}, learn steps {learn_iters}')
-
-    x = [i+1 for i in range(len(score_history))]
-    plot_learning_curve(x, score_history, figure_file)
+    if not load_checkpoint:
+        x = [i+1 for i in range(len(score_history))]
+        plot_learning_curve(x, score_history, figure_file)
 
 
 
